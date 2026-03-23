@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package kernelview.correlator.v1;
+
+option go_package = "github.com/kernelview/kernelview/pkg/pb/correlatorpb";
+
+import "google/protobuf/timestamp.proto";
+
+// AnomalyBundle is the input to the AI Correlator.
+// Assembled by the Collector when an anomaly is detected.
+message AnomalyBundle {
+  string bundle_id = 1;
+  google.protobuf.Timestamp detected_at = 2;
+
+  // Triggering anomaly
+  AnomalyType anomaly_type = 3;
+  string affected_service = 4;
+  string affected_namespace = 5;
+  string affected_pod = 6;
+  string affected_node = 7;
+
+  // Metric time-series (last 60 seconds)
+  MetricsSnapshot affected_metrics = 10;
+
+  // Top 5 upstream and downstream dependency metrics
+  repeated DependencyMetrics upstream_deps = 11;
+  repeated DependencyMetrics downstream_deps = 12;
+
+  // Kubernetes events for the affected pod (last 10 minutes)
+  repeated KubernetesEvent k8s_events = 20;
+
+  // Pod logs (last 20 lines, scrubbed)
+  repeated string pod_log_lines = 21;
+
+  // Syscall rate for affected pod (last 60 seconds)
+  repeated SyscallDataPoint syscall_rates = 30;
+
+  // OOM events on the affected node (last 10 minutes)
+  repeated OomSnapshot oom_events = 31;
+}
+
+enum AnomalyType {
+  ANOMALY_TYPE_UNSPECIFIED = 0;
+  LATENCY_SPIKE = 1;
+  ERROR_RATE_SPIKE = 2;
+  NOISY_NEIGHBOR = 3;
+  OOM_KILL = 4;
+  CONNECTION_FAILURE = 5;
+  UNEXPECTED_PROCESS = 6;
+}
+
+message MetricsSnapshot {
+  string service_name = 1;
+  repeated TimeSeriesPoint request_rate = 2;      // requests/sec
+  repeated TimeSeriesPoint latency_p50 = 3;       // milliseconds
+  repeated TimeSeriesPoint latency_p95 = 4;
+  repeated TimeSeriesPoint latency_p99 = 5;
+  repeated TimeSeriesPoint error_rate_4xx = 6;     // percentage
+  repeated TimeSeriesPoint error_rate_5xx = 7;     // percentage
+  repeated TimeSeriesPoint cpu_usage = 8;          // percentage
+  repeated TimeSeriesPoint memory_usage = 9;       // bytes
+}
+
+message TimeSeriesPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double value = 2;
+}
+
+message DependencyMetrics {
+  string service_name = 1;
+  string direction = 2; // "upstream" or "downstream"
+  MetricsSnapshot metrics = 3;
+}
+
+message KubernetesEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string type = 2;     // "Normal" or "Warning"
+  string reason = 3;   // "Pulled", "Created", "Started", "Unhealthy", "OOMKilling", etc.
+  string message = 4;  // Human-readable message
+  string source = 5;   // "kubelet", "scheduler", etc.
+  int32 count = 6;     // Event occurrence count
+}
+
+message SyscallDataPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double rate = 2;  // syscalls per second
+}
+
+message OomSnapshot {
+  google.protobuf.Timestamp timestamp = 1;
+  string victim_pod = 2;
+  string victim_container = 3;
+  uint64 memory_limit = 4;
+  uint64 memory_usage = 5;
+}
+
+// CorrelationResult is the output from the AI Correlator.
+message CorrelationResult {
+  string correlation_id = 1;
+  string bundle_id = 2;
+  google.protobuf.Timestamp analyzed_at = 3;
+
+  // AI analysis
+  string root_cause = 10;
+  Confidence confidence = 11;
+  string recommended_action = 12;
+  RemediationSafety auto_remediation_safe = 13;
+  RemediationType remediation_type = 14;
+
+  // Affected entities
+  repeated string affected_pods = 20;
+  repeated string affected_services = 21;
+
+  // Raw LLM response (for debugging)
+  string raw_llm_response = 30;
+  string llm_model_used = 31;
+  int64 llm_latency_ms = 32;
+
+  // Parse status
+  bool parse_success = 40;
+  string parse_error = 41;
+}
+
+enum Confidence {
+  CONFIDENCE_UNSPECIFIED = 0;
+  HIGH = 1;
+  MEDIUM = 2;
+  LOW = 3;
+  PARSE_ERROR = 4;
+}
+
+enum RemediationSafety {
+  REMEDIATION_SAFETY_UNSPECIFIED = 0;
+  SAFE = 1;
+  UNSAFE = 2;
+  HUMAN_REQUIRED = 3;
+}
+
+enum RemediationType {
+  REMEDIATION_TYPE_UNSPECIFIED = 0;
+  THROTTLE_POD = 1;
+  RESTART_POD = 2;
+  ISOLATE_POD = 3;
+  ADJUST_LIMITS = 4;
+  SCALE_DOWN = 5;
+  NONE = 6;
+}
+
+// CorrelatorService is the internal gRPC service.
+service CorrelatorService {
+  rpc Analyze(AnomalyBundle) returns (CorrelationResult);
+  rpc GetCorrelation(GetCorrelationRequest) returns (CorrelationResult);
+}
+
+message GetCorrelationRequest {
+  string correlation_id = 1;
+}

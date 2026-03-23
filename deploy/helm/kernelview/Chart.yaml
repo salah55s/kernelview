@@ -1,0 +1,18 @@
+apiVersion: v2
+name: kernelview
+description: KernelView — eBPF-powered Kubernetes Autopilot
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ebpf
+  - kubernetes
+  - observability
+  - autopilot
+  - remediation
+home: https://kernelview.io
+sources:
+  - https://github.com/kernelview/kernelview
+maintainers:
+  - name: KernelView
+    email: team@kernelview.io

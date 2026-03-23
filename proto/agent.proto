@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package kernelview.agent.v1;
+
+option go_package = "github.com/kernelview/kernelview/pkg/pb/agentpb";
+
+import "google/protobuf/timestamp.proto";
+
+// HttpSpan represents a captured HTTP request/response pair.
+message HttpSpan {
+  string trace_id = 1;
+  string span_id = 2;
+  string service_name = 3;
+  string namespace = 4;
+  string pod_name = 5;
+  string node_name = 6;
+  string container_id = 7;
+
+  // Request fields
+  string method = 10;
+  string path = 11;
+  string host = 12;
+  int32 status_code = 13;
+
+  // Timing
+  google.protobuf.Timestamp request_start = 20;
+  google.protobuf.Timestamp response_end = 21;
+  int64 duration_ns = 22;
+
+  // Network
+  string src_ip = 30;
+  int32 src_port = 31;
+  string dst_ip = 32;
+  int32 dst_port = 33;
+
+  // Metadata
+  int64 request_size_bytes = 40;
+  int64 response_size_bytes = 41;
+  string protocol = 42; // "HTTP/1.1", "HTTP/2", "gRPC"
+
+  // Source identification
+  uint32 host_pid = 50;
+  uint64 cgroup_id = 51;
+}
+
+// TcpEvent represents a TCP connection lifecycle event.
+message TcpEvent {
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    CONNECT = 1;
+    ACCEPT = 2;
+    CLOSE = 3;
+    RETRANSMIT = 4;
+    STATE_CHANGE = 5;
+  }
+
+  EventType event_type = 1;
+  google.protobuf.Timestamp timestamp = 2;
+
+  string src_ip = 3;
+  int32 src_port = 4;
+  string dst_ip = 5;
+  int32 dst_port = 6;
+
+  string pod_name = 10;
+  string namespace = 11;
+  string node_name = 12;
+  uint32 host_pid = 13;
+  uint64 cgroup_id = 14;
+
+  // TCP state (for STATE_CHANGE events)
+  int32 old_state = 20;
+  int32 new_state = 21;
+
+  // Retransmit info
+  uint32 retransmit_count = 30;
+}
+
+// SyscallRateSummary is sent every 5 seconds per node.
+message SyscallRateSummary {
+  google.protobuf.Timestamp timestamp = 1;
+  string node_name = 2;
+
+  repeated PodSyscallRate pod_rates = 3;
+}
+
+message PodSyscallRate {
+  string pod_name = 1;
+  string namespace = 2;
+  string container_id = 3;
+  uint64 cgroup_id = 4;
+  uint32 host_pid = 5;
+
+  uint64 total_syscalls = 10;      // Total in the 5-second window
+  double syscalls_per_second = 11; // Computed rate
+
+  // Top syscall breakdown (top 10 by count)
+  repeated SyscallCount top_syscalls = 20;
+}
+
+message SyscallCount {
+  int32 syscall_nr = 1;
+  string syscall_name = 2;
+  uint64 count = 3;
+}
+
+// OomEvent is sent immediately when an OOM kill is detected.
+message OomEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string node_name = 2;
+
+  // Victim information
+  uint32 victim_pid = 10;
+  string victim_comm = 11;
+  string victim_pod_name = 12;
+  string victim_namespace = 13;
+  string victim_container_id = 14;
+
+  // OOM context
+  uint64 pages_requested = 20;
+  int32 oom_score_adj = 21;
+  string kill_source = 22; // "kernel_oom" or "cgroup_oom"
+
+  // Memory context at time of kill
+  uint64 total_memory_bytes = 30;
+  uint64 used_memory_bytes = 31;
+  uint64 cgroup_limit_bytes = 32;
+  uint64 cgroup_usage_bytes = 33;
+}
+
+// ExecEvent is captured when a new process executes.
+message ExecEvent {
+  google.protobuf.Timestamp timestamp = 1;
+  string node_name = 2;
+
+  uint32 pid = 10;
+  uint32 ppid = 11;
+  uint32 uid = 12;
+  string comm = 13;
+  string filename = 14;
+
+  string pod_name = 20;
+  string namespace = 21;
+  string container_id = 22;
+  uint64 cgroup_id = 23;
+}
+
+// Heartbeat is sent every 10 seconds by each agent.
+message Heartbeat {
+  google.protobuf.Timestamp timestamp = 1;
+  string node_name = 2;
+
+  // Agent health
+  string agent_version = 10;
+  int64 uptime_seconds = 11;
+  double cpu_usage_percent = 12;
+  uint64 memory_rss_bytes = 13;
+  bool sampling_active = 14;
+  double sampling_rate = 15;
+
+  // BPF program status
+  repeated BpfProgramStatus programs = 20;
+
+  // Kernel info
+  string kernel_version = 30;
+  string cgroup_version = 31; // "v1" or "v2"
+  bool btf_available = 32;
+}
+
+message BpfProgramStatus {
+  string name = 1;
+  bool loaded = 2;
+  string error = 3;
+  uint64 events_total = 4;
+  uint64 events_dropped = 5;
+}
+
+// AgentStream is the bidirectional streaming service.
+service AgentService {
+  // StreamEvents is the main event stream from agent to collector.
+  rpc StreamEvents(stream AgentEventBatch) returns (stream AgentCommand);
+}
+
+// AgentEventBatch groups multiple events into a single gRPC message.
+message AgentEventBatch {
+  string node_name = 1;
+  string agent_id = 2;
+
+  repeated HttpSpan http_spans = 10;
+  repeated TcpEvent tcp_events = 11;
+  repeated OomEvent oom_events = 12;
+  repeated ExecEvent exec_events = 13;
+  SyscallRateSummary syscall_summary = 14;
+  Heartbeat heartbeat = 15;
+}
+
+// AgentCommand is sent from collector to agent for dynamic configuration.
+message AgentCommand {
+  enum CommandType {
+    COMMAND_TYPE_UNSPECIFIED = 0;
+    UPDATE_SAMPLING_RATE = 1;
+    ENABLE_PROGRAM = 2;
+    DISABLE_PROGRAM = 3;
+    THROTTLE_POD = 4;
+  }
+
+  CommandType command_type = 1;
+  map<string, string> parameters = 2;
+}
