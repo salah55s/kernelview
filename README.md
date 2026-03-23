@@ -149,7 +149,7 @@ make dev-deploy
 
 KernelView Enterprise adds AI-powered root cause analysis and automated remediation on top of the open source foundation.
 
-**[Contact Sales →](https://kernelview.io/enterprise)**
+**[Contact Me →](mailto:salah.nb.03@gmail.com)**
 
 | Feature | Open Source | Enterprise |
 |---------|-----------|------------|
@@ -171,4 +171,4 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 The open source components of KernelView are licensed under the [Apache License 2.0](LICENSE).
 
-Enterprise components are available under a separate commercial license. Contact [sales@kernelview.io](mailto:sales@kernelview.io) for details.
+Enterprise components are available under a separate commercial license. Contact [salah.nb.03@gmail.com](mailto:salah.nb.03@gmail.com) for details.
