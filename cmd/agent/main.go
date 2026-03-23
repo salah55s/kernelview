@@ -14,6 +14,7 @@ import (
 	"github.com/kernelview/kernelview/internal/agent/bpf"
 	"github.com/kernelview/kernelview/internal/agent/cgroup"
 	"github.com/kernelview/kernelview/internal/agent/metadata"
+	"github.com/kernelview/kernelview/internal/agent/stream"
 	"github.com/kernelview/kernelview/pkg/config"
 )
 
@@ -87,11 +88,25 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// TODO: Start gRPC stream to Collector
-	// TODO: Start ring buffer consumer
-	// TODO: Start syscall rate reporter (every 5 seconds)
-	// TODO: Start heartbeat sender (every 10 seconds)
-	// TODO: Start metrics server for Prometheus scraping
+	// Start gRPC stream to Collector
+	streamClient := stream.NewClient(
+		cfg.CollectorEndpoint,
+		cfg.NodeName,
+		cfg.NodeName, // agentID = nodeName for now
+		loader,
+		resolver,
+		logger,
+	)
+
+	// Start heartbeat sender
+	go streamClient.SendHeartbeat(ctx)
+
+	// Start streaming in the background
+	go func() {
+		if err := streamClient.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("stream client exited with error", "error", err)
+		}
+	}()
 
 	logger.Info("agent started successfully",
 		"node", cfg.NodeName,
