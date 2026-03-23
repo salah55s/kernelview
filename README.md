@@ -90,8 +90,9 @@ Node Kernel → eBPF Ring Buffer → Agent (Go) → gRPC → Collector
 ### Install
 
 ```bash
-helm repo add kernelview https://charts.kernelview.io
-helm install kernelview kernelview/kernelview \
+git clone https://github.com/salah55s/kernelview.git
+cd kernelview
+helm install kernelview deploy/helm/kernelview/ \
   --namespace kernelview \
   --create-namespace
 ```

@@ -57,7 +57,7 @@ AI Analysis:
 
 Actions Taken: %s
 
-View in Dashboard: https://dashboard.kernelview.io/incidents/%s
+View in Dashboard: http://localhost:8080/incidents/%s
 `,
 		incident.Severity,
 		incident.Namespace, incident.ServiceName,

@@ -61,7 +61,7 @@ func (p *PagerDutyChannel) Send(incident *escalation.ManagedIncident) error {
 			},
 		},
 		"links": []map[string]string{
-			{"href": fmt.Sprintf("https://dashboard.kernelview.io/incidents/%s", incident.ID), "text": "KernelView Dashboard"},
+			{"href": fmt.Sprintf("http://localhost:8080/incidents/%s", incident.ID), "text": "KernelView Dashboard"},
 		},
 	}
 

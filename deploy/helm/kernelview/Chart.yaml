@@ -10,9 +10,9 @@ keywords:
   - observability
   - autopilot
   - remediation
-home: https://kernelview.io
+home: https://github.com/salah55s/kernelview
 sources:
-  - https://github.com/kernelview/kernelview
+  - https://github.com/salah55s/kernelview
 maintainers:
   - name: KernelView
-    email: team@kernelview.io
+    email: salah.nb.03@gmail.com
