@@ -1,31 +1,50 @@
 # KernelView Examples
 
-This directory contains scripts to artificially generate the complex Kubernetes failure modes that KernelView is designed to detect and remediate. 
+This directory contains scripts that reproduce real Kubernetes failure modes on a test cluster. Each script maps to a specific KernelView incident type.
 
-You can use these scripts on a test cluster to see KernelView's eBPF agents, Incident Classifier, and LLM Correlator in action.
-
-## 1. CPU CFS Throttling (The "Silent P99 Killer")
-**Script:** [`simulate_cpu_throttle.sh`](./simulate_cpu_throttle.sh)
-
-**What it does:** Deploys a pod with an extremely tight CPU limit (`50m`) that runs a bursty `sysbench` workload. The average CPU utilization remains low (< 5%), but the container is constantly throttled by the Linux Completely Fair Scheduler (CFS), destroying tail latency. 
-
-**KernelView's Response:** Detects the `CPU-001` signature (throttle ratio > 25% with severe latency impact) via `cfs_throttle.c` and flags the incorrect limit configuration.
-
-## 2. DNS ndots:5 Amplification
-**Script:** [`simulate_dns_ndots.sh`](./simulate_dns_ndots.sh)
-
-**What it does:** Deploys a pod making continuous external API calls (e.g., `api.stripe.com`). Because of standard Kubernetes `ndots:5` configuration, each call triggers 3 failing `NXDOMAIN` queries against the internal CoreDNS before resolving the external domain, adding a significant latency tax.
-
-**KernelView's Response:** Detects the `NET-001` signature by hooking `udp_sendmsg`/`udp_recvmsg` on port 53 via `dns_trace.c`, tracks the high `NXDOMAIN` ratio per cgroup, and automatically recommends the `ndots:2` `dnsConfig` patch.
-
-## Running Examples
+## Quick Start
 ```bash
-# Ensure KernelView is deployed first
+# Ensure KernelView is deployed
 kubectl get pods -n kernelview
 
-# Run a simulation
+# Run any example
 ./simulate_cpu_throttle.sh
 
-# Open the dashboard and watch the incident appear
+# Open the dashboard
 kubectl port-forward svc/kernelview-dashboard 8080:8080 -n kernelview
+```
+
+## Examples by Incident Family
+
+### Memory (MEM)
+| Script | Incident | What It Does |
+|--------|----------|-------------|
+| `simulate_oom_cascade.sh` | MEM-001/002 | 3 pods fighting for memory, all OOM killed |
+| `simulate_memory_leak.sh` | MEM-003 | Python app leaking ~8MB/min until OOM |
+
+### CPU
+| Script | Incident | What It Does |
+|--------|----------|-------------|
+| `simulate_cpu_throttle.sh` | CPU-001 | Bursty sysbench on 50m limit — the "Silent P99 Killer" |
+
+### Network (NET)
+| Script | Incident | What It Does |
+|--------|----------|-------------|
+| `simulate_dns_ndots.sh` | NET-001 | Continuous external DNS calls hitting ndots:5 amplification |
+| `simulate_conntrack_exhaustion.sh` | NET-007 | 500 conns/sec flooding the node conntrack table |
+
+### Application (APP)
+| Script | Incident | What It Does |
+|--------|----------|-------------|
+| `simulate_crashloop_auth.sh` | APP-001 | Pod crashes <2s with 401 auth failure |
+
+### Control Plane (CTL)
+| Script | Incident | What It Does |
+|--------|----------|-------------|
+| `simulate_webhook_deadlock.sh` | CTL-003 | ValidatingWebhook with failurePolicy:Fail → circular deadlock |
+
+## Cleanup
+```bash
+kubectl delete ns kv-simulation kv-webhook-test 2>/dev/null || true
+kubectl delete validatingwebhookconfiguration kernelview-webhook-deadlock-demo 2>/dev/null || true
 ```
